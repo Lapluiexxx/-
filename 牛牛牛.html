@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邱豪牛逼专属小网页</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- 配置Tailwind自定义颜色 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'soft-pink': '#FFE6EA',
+            'soft-blue': '#E6F0FF',
+            'soft-green': '#E6FFEE',
+            'soft-yellow': '#FFFBE6',
+            'soft-purple': '#F0E6FF',
+            'soft-orange': '#FFF0E6',
+            'special': '#D1E7FE'
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .note-shadow {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      }
+      .paw-icon {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+      .overlay {
+        backdrop-filter: blur(5px);
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen overflow-hidden">
+  <!-- 准备提示弹窗 -->
+  <div id="prompt-overlay" class="fixed inset-0 bg-black/50 overlay z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-8 max-w-md w-full text-center shadow-xl">
+      <h2 class="text-2xl font-bold mb-6">你准备好了吗？</h2>
+      <div class="flex gap-4 justify-center">
+        <button id="ready-btn" class="px-6 py-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition">准备好了</button>
+        <button id="not-ready-btn" class="px-6 py-3 bg-red-500 text-white rounded-md hover:bg-red-600 transition">没准备好</button>
+      </div>
+      <p id="response-text" class="mt-4 text-gray-600 hidden"></p>
+    </div>
+  </div>
+
+  <div id="notes-container" class="relative w-full h-screen opacity-0 transition-opacity duration-1000"></div>
+
+  <script>
+    // 便签文本内容
+    const noteTexts = [
+      "邱豪牛呗",
+      "邱豪真牛",
+      "邱豪最牛",
+      "祝你变胖",
+      "越吃越胖",
+      "胖得可爱",
+      "福气满满",
+      "好运连连",
+      "万事顺利",
+      "天天开心",
+      "心想事成",
+      "笑口常开",
+      "前程似锦",
+      "平安喜乐",
+      "健康无忧",
+      "幸福美满",
+      "财源广进",
+      "步步高升",
+      "一帆风顺",
+      "大展宏图"
+    ];
+    
+    // 柔和的便签颜色
+    const noteColors = [
+      'soft-pink',
+      'soft-blue',
+      'soft-green',
+      'soft-yellow',
+      'soft-purple',
+      'soft-orange'
+    ];
+    
+    // 创建500个便签
+    const totalNotes = 500;
+    const container = document.getElementById('notes-container');
+    const overlay = document.getElementById('prompt-overlay');
+    const readyBtn = document.getElementById('ready-btn');
+    const notReadyBtn = document.getElementById('not-ready-btn');
+    const responseText = document.getElementById('response-text');
+    let notes = [];
+    let animationStarted = false;
+    
+    // 生成爱心形状的坐标点（中心空白较大）
+    function generateHeartShapePoints(count) {
+      const points = [];
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const baseSize = Math.min(window.innerWidth, window.innerHeight) * 0.3;
+      
+      // 使用心形曲线方程生成点，控制内部空白大小
+      for (let i = 0; i < count; i++) {
+        // 增加半径范围，使中心空白更大
+        const t = Math.random() * Math.PI * 2;
+        const r = 0.7 + Math.random() * 0.6; // 0.7-1.3的范围，使内部有较大空白
+        
+        // 心形参数方程
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+        
+        // 缩放并定位到中心
+        const pointX = centerX + x * baseSize / 16;
+        const pointY = centerY - y * baseSize / 16; // 负号是为了正向显示
+        
+        points.push({x: pointX, y: pointY});
+      }
+      
+      return points;
+    }
+    
+    // 生成散开后的随机位置
+    function generateScatteredPoints(count) {
+      const points = [];
+      const padding = 100;
+      
+      for (let i = 0; i < count; i++) {
+        const x = padding + Math.random() * (window.innerWidth - padding * 2);
+        const y = padding + Math.random() * (window.innerHeight - padding * 2);
+        points.push({x, y});
+      }
+      
+      return points;
+    }
+    
+    // 创建便签元素
+    function createNote(index, isSpecial = false) {
+      const note = document.createElement('div');
+      
+      // 随机选择文本和颜色
+      const text = noteTexts[Math.floor(Math.random() * noteTexts.length)];
+      const color = isSpecial ? 'special' : noteColors[Math.floor(Math.random() * noteColors.length)];
+      
+      // 随机大小 (除了特殊便签)
+      const sizeClass = isSpecial ? 'w-32 h-32 text-xl' : 
+        `w-${16 + Math.floor(Math.random() * 6)} h-${16 + Math.floor(Math.random() * 6)} text-sm md:text-base`;
+      
+      // 随机旋转角度
+      const rotation = (Math.random() * 10 - 5) + 'deg';
+      
+      note.className = `absolute ${sizeClass} bg-${color} rounded-md p-4 note-shadow transition-all duration-700 ease-out`;
+      note.style.transform = `rotate(${rotation}) translateY(${window.innerHeight}px)`;
+      note.innerHTML = `
+        <span>${text}</span>
+        <div class="paw-icon">🐾</div>
+      `;
+      
+      // 特殊便签的样式
+      if (isSpecial) {
+        note.innerHTML = `
+          <span class="font-bold text-center block mt-6">邱豪专属</span>
+          <div class="paw-icon">🐾</div>
+        `;
+        note.classList.add('z-10', 'font-bold', 'border-2', 'border-blue-300');
+      }
+      
+      container.appendChild(note);
+      return note;
+    }
+    
+    // 初始化所有便签
+    function initNotes() {
+      // 生成位置点
+      const heartPoints = generateHeartShapePoints(totalNotes - 1); // 留出一个位置给特殊便签
+      const scatterPoints = generateScatteredPoints(totalNotes);
+      
+      // 清空现有便签
+      container.innerHTML = '';
+      notes = [];
+      
+      // 创建特殊便签（中心位置）
+      const specialNote = createNote(-1, true);
+      notes.push({
+        element: specialNote,
+        heartX: window.innerWidth / 2,
+        heartY: window.innerHeight / 2,
+        scatterX: scatterPoints[0].x,
+        scatterY: scatterPoints[0].y,
+        isSpecial: true
+      });
+      
+      // 创建普通便签
+      for (let i = 0; i < totalNotes - 1; i++) {
+        const note = createNote(i);
+        notes.push({
+          element: note,
+          heartX: heartPoints[i].x,
+          heartY: heartPoints[i].y,
+          scatterX: scatterPoints[i + 1].x,
+          scatterY: scatterPoints[i + 1].y,
+          isSpecial: false
+        });
+      }
+    }
+    
+    // 执行入场动画（开火车式）
+    function animateEntrance() {
+      notes.forEach((note, index) => {
+        setTimeout(() => {
+          const element = note.element;
+          const x = note.heartX - element.offsetWidth / 2;
+          const y = note.heartY - element.offsetHeight / 2;
+          const rotation = element.style.transform.match(/rotate\(([^)]+)\)/)[1];
+          
+          // 移动到爱心形状位置
+          element.style.transform = `translate(${x}px, ${y}px) rotate(${rotation})`;
+          
+          // 到位后的轻微旋转动画
+          setTimeout(() => {
+            const newRotation = (parseFloat(rotation) + (Math.random() * 4 - 2)) + 'deg';
+            element.style.transition = 'transform 0.5s ease-in-out';
+            element.style.transform = `translate(${x}px, ${y}px) rotate(${newRotation})`;
+          }, 700);
+        }, index * 5); // 每个便签依次入场，间隔5ms
+      });
+    }
+    
+    // 执行散开动画
+    function animateScatter() {
+      notes.forEach((note, index) => {
+        setTimeout(() => {
+          const element = note.element;
+          const x = note.scatterX - element.offsetWidth / 2;
+          const y = note.scatterY - element.offsetHeight / 2;
+          const rotation = (Math.random() * 15 - 7.5) + 'deg';
+          
+          element.style.transition = 'transform 1.5s ease-out';
+          element.style.transform = `translate(${x}px, ${y}px) rotate(${rotation})`;
+        }, index * 2); // 依次散开
+      });
+    }
+    
+    // 开始动画流程
+    function startAnimation() {
+      overlay.classList.add('opacity-0', 'pointer-events-none');
+      overlay.style.transition = 'opacity 0.5s ease-out';
+      container.classList.remove('opacity-0');
+      
+      // 开始入场动画
+      setTimeout(animateEntrance, 500);
+      
+      // 5秒后开始散开动画
+      setTimeout(animateScatter, 5000);
+    }
+    
+    // 绑定按钮事件
+    readyBtn.addEventListener('click', () => {
+      if (responseText.classList.contains('hidden')) {
+        responseText.textContent = '你没毛病';
+        responseText.classList.remove('hidden', 'text-red-500');
+        responseText.classList.add('text-green-500');
+        
+        setTimeout(startAnimation, 1000);
+      } else {
+        startAnimation();
+      }
+    });
+    
+    notReadyBtn.addEventListener('click', () => {
+      responseText.textContent = '有毛病？';
+      responseText.classList.remove('hidden', 'text-green-500');
+      responseText.classList.add('text-red-500');
+    });
+    
+    // 页面加载完成后初始化
+    window.addEventListener('load', () => {
+      initNotes();
+    });
+    
+    // 窗口大小改变时重新排列
+    window.addEventListener('resize', () => {
+      if (animationStarted) {
+        const scatterPoints = generateScatteredPoints(totalNotes);
+        
+        notes.forEach((note, index) => {
+          const element = note.element;
+          const x = scatterPoints[index].x - element.offsetWidth / 2;
+          const y = scatterPoints[index].y - element.offsetHeight / 2;
+          const rotation = element.style.transform.match(/rotate\(([^)]+)\)/)[1];
+          
+          element.style.transform = `translate(${x}px, ${y}px) rotate(${rotation})`;
+        });
+      } else {
+        initNotes();
+      }
+    });
+  </script>
+</body>
+</html>
